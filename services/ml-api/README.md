@@ -52,6 +52,22 @@ updates its result from the trained model prediction and per-class scores. Set
 not `http://127.0.0.1:8000`. Configure `SECURESENSE_ALLOWED_ORIGINS` on the API
 when the dashboard runs on another origin.
 
+The dashboard can use a dark-styled Google Map when the Google Maps JavaScript
+API is enabled. Set `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` in `apps/web/.env.local`;
+the dashboard keeps its local preview map when this setting is absent. Google
+Maps browser keys are visible to visitors, so restrict the key by HTTP referrer
+to your local development origin and deployed dashboard domains, enable only
+the Maps JavaScript API, and set an appropriate usage quota.
+
+For deployments, pin the model artifact before it is loaded by setting
+`SECURESENSE_MODEL_SHA256` to its trusted SHA-256 digest. For example, generate
+the digest with `Get-FileHash services/ml-api/model_artifacts/url_threat_model.joblib -Algorithm SHA256`
+in PowerShell. The API verifies this digest before deserializing the model.
+The API is unauthenticated and is intended to stay bound to `127.0.0.1` for
+local development. CORS is not authentication; deployments that expose the API
+outside a trusted host must put it behind an authenticated, rate-limiting
+gateway before accepting traffic.
+
 ## Interpreting results
 
 This is a lexical, dataset-trained baseline—not a reputation service, malware

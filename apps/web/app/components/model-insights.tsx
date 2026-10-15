@@ -71,7 +71,7 @@ const ANALYSIS_HISTORY_KEY = "securesense-url-analysis-history";
 const MAX_HISTORY = 15;
 const EMPTY_ANALYSIS_HISTORY: AnalysisResult[] = [];
 
-function apiBase() {
+export function apiBase() {
   return (process.env.NEXT_PUBLIC_ML_API_URL || "http://127.0.0.1:8000").replace(/\/+$/, "");
 }
 

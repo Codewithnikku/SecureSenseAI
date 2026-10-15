@@ -80,27 +80,6 @@ export function Icon({
   );
 }
 
-const navSections = [
-  {
-    title: "WORKSPACE",
-    items: [
-      { label: "Overview", href: "/", icon: "grid" },
-      { label: "Threats", href: "/threats", icon: "shield", count: "8" },
-      { label: "Scan history", href: "/scan-history", icon: "scan" },
-      { label: "Reports", href: "/reports", icon: "file" },
-      { label: "Model insights", href: "/insights", icon: "trend" },
-    ],
-  },
-  {
-    title: "TOOLS",
-    items: [
-      { label: "Live activity", href: "/activity", icon: "activity", live: true },
-      { label: "Integrations", href: "/integrations", icon: "lock" },
-      { label: "Analyze URL", href: "/analysis", icon: "radar" },
-    ],
-  },
-] as const;
-
 const pageNames: Record<string, string> = {
   "/": "Overview",
   "/threats": "Threats",
@@ -113,45 +92,6 @@ const pageNames: Record<string, string> = {
   "/settings": "Settings",
 };
 
-function Navigation({
-  pathname,
-  mobile = false,
-  onNavigate,
-}: {
-  pathname: string;
-  mobile?: boolean;
-  onNavigate?: () => void;
-}) {
-  return (
-    <>
-      {navSections.map((section) => (
-        <div key={section.title}>
-          <span className="nav-label">{section.title}</span>
-          <nav className="primary-nav" aria-label={section.title.toLowerCase()}>
-            {section.items.map((item) => {
-              const active = pathname === item.href;
-              return (
-                <Link
-                  className={`nav-link${active ? " is-active" : ""}`}
-                  href={item.href}
-                  key={item.href}
-                  aria-current={active ? "page" : undefined}
-                  onClick={() => mobile && onNavigate?.()}
-                >
-                  <Icon name={item.icon} size={18} />
-                  <span>{item.label}</span>
-                  {"count" in item && <span className="nav-count">{item.count}</span>}
-                  {"live" in item && <span className="live-dot" />}
-                </Link>
-              );
-            })}
-          </nav>
-        </div>
-      ))}
-    </>
-  );
-}
-
 export function DashboardShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -159,6 +99,14 @@ export function DashboardShell({ children }: { children: ReactNode }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const currentPage = pageNames[pathname] ?? "Overview";
+  const navigationItems = [
+    { label: "Dashboard", href: "/", icon: "grid" },
+    { label: "Threats", href: "/threats", icon: "shield" },
+    { label: "Scan history", href: "/scan-history", icon: "scan" },
+    { label: "Visibility", href: "/insights", icon: "trend" },
+    { label: "Network", href: "/activity", icon: "globe" },
+    { label: "Assets", href: "/integrations", icon: "database" },
+  ] as const;
 
   function submitSearch(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -168,38 +116,9 @@ export function DashboardShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="app-shell">
-      <aside className="sidebar" aria-label="Main navigation">
-        <Link className="brand" href="/" aria-label="SecureSense AI home">
-          <span className="brand-mark"><Icon name="shield" size={21} /></span>
-          <span className="brand-name">SecureSense<span>AI</span></span>
-        </Link>
-        <div className="workspace-switcher">
-          <span className="workspace-avatar">A</span>
-          <span className="workspace-copy"><strong>Acme Corporation</strong><small>Sample workspace</small></span>
-          <Icon name="chevron" size={15} className="workspace-chevron" />
-        </div>
-        <Navigation pathname={pathname} />
-        <div className="sidebar-bottom">
-          <div className="plan-card">
-            <div className="plan-icon"><Icon name="spark" size={17} /></div>
-            <strong>Your security, at a glance</strong>
-            <p>Connect a security tool to start monitoring your workspace.</p>
-            <Link href="/integrations">Explore integrations <Icon name="arrow" size={14} /></Link>
-          </div>
-          <Link className={`nav-link settings-link${pathname === "/settings" ? " is-active" : ""}`} href="/settings">
-            <Icon name="settings" size={18} /><span>Settings</span>
-          </Link>
-          <div className="profile">
-            <span className="profile-avatar">JD</span>
-            <span className="profile-copy"><strong>Jordan Davis</strong><small>Workspace admin</small></span>
-            <Icon name="chevron" size={15} className="profile-chevron" />
-          </div>
-        </div>
-      </aside>
-
       <div className="main-column">
         <header className="topbar">
-          <div className="mobile-brand">
+          <div className="header-brand">
             <button
               className="mobile-menu-button icon-button"
               aria-label={mobileMenuOpen ? "Close navigation" : "Open navigation"}
@@ -208,23 +127,37 @@ export function DashboardShell({ children }: { children: ReactNode }) {
             >
               <span className={`menu-glyph${mobileMenuOpen ? " is-open" : ""}`} />
             </button>
-            <Link className="mobile-brand-link" href="/">
-              <span className="brand-mark"><Icon name="shield" size={18} /></span>
+            <Link className="mobile-brand-link" href="/" aria-label="SecureSense AI home">
+              <span className="brand-mark"><Icon name="shield" size={19} /></span>
               <span className="brand-name">SecureSense<span>AI</span></span>
             </Link>
           </div>
-          <div className="breadcrumb"><span>Workspace</span><Icon name="chevron" size={14} /><strong>{currentPage}</strong></div>
+          <nav className="top-nav" aria-label="Main navigation">
+            {navigationItems.map((item) => {
+              const active = pathname === item.href;
+              return (
+                <Link
+                  className={`top-nav-link${active ? " is-active" : ""}`}
+                  href={item.href}
+                  key={item.href}
+                  aria-current={active ? "page" : undefined}
+                >
+                  <Icon name={item.icon} size={15} />
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })}
+          </nav>
           <div className="topbar-actions">
             <form className="search-box" onSubmit={submitSearch}>
               <Icon name="search" size={17} />
               <input
                 type="search"
-                placeholder="Search threats..."
-                aria-label="Search threats"
+                placeholder="Search here..."
+                aria-label="Search threats and assets"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
               />
-              <kbd>↵</kbd>
             </form>
             <div className="notification-wrap">
               <button
@@ -243,19 +176,19 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                 </div>
               )}
             </div>
-            <a className="help-button" href="mailto:support@securesense.ai?subject=SecureSense%20AI%20dashboard%20help">Help center</a>
-          </div>
+              <Link className="header-profile" href="/settings">
+                <span className="profile-avatar">JD</span>
+                <span className="profile-copy"><strong>Jordan Davis</strong><small>Workspace admin</small></span>
+              </Link>
+            </div>
         </header>
         {mobileMenuOpen && (
-          <div className="mobile-nav-panel">
-            <div className="workspace-switcher">
-              <span className="workspace-avatar">A</span>
-              <span className="workspace-copy"><strong>Acme Corporation</strong><small>Sample workspace</small></span>
-            </div>
-            <Navigation pathname={pathname} mobile onNavigate={() => setMobileMenuOpen(false)} />
-            <Link className={`nav-link${pathname === "/settings" ? " is-active" : ""}`} href="/settings" onClick={() => setMobileMenuOpen(false)}>
-              <Icon name="settings" size={18} /><span>Settings</span>
-            </Link>
+            <div className="mobile-nav-panel" aria-label="More dashboard pages">
+              {[...navigationItems, { label: "Analyze URL", href: "/analysis", icon: "radar" as const }, { label: "Reports", href: "/reports", icon: "file" as const }, { label: "Settings", href: "/settings", icon: "settings" as const }].map((item) => (
+                <Link className={`top-nav-link${pathname === item.href ? " is-active" : ""}`} href={item.href} key={item.href} onClick={() => setMobileMenuOpen(false)}>
+                  <Icon name={item.icon} size={16} /><span>{item.label}</span>
+                </Link>
+              ))}
           </div>
         )}
         <main className="dashboard">
@@ -263,7 +196,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
           <div className="parallax-orb parallax-orb-two" aria-hidden="true" />
           {children}
           <footer className="dashboard-footer">
-            <span>SecureSense AI <span className="footer-separator">·</span> Sample workspace data</span>
+            <span>SecureSense AI <span className="footer-separator">·</span> {currentPage} <span className="footer-separator">·</span> Sample workspace data</span>
             <span><span className="live-dot" />Dashboard ready</span>
           </footer>
         </main>

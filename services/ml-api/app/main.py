@@ -2,16 +2,21 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import logging
+import math
 import os
+import re
 from functools import lru_cache
 from pathlib import Path
+from typing import BinaryIO
 from urllib.parse import urlsplit
 
 import joblib
 import pandas as pd
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 
@@ -51,6 +56,16 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    return response
+
+
 class AnalyzeRequest(BaseModel):
     url: str = Field(min_length=1, max_length=2048)
 
@@ -78,13 +93,31 @@ class AnalyzeRequest(BaseModel):
         return candidate
 
 
+def verify_model_integrity(model_file: BinaryIO, expected_sha256: str) -> None:
+    if not expected_sha256:
+        return
+    if not re.fullmatch(r"[a-f0-9]{64}", expected_sha256):
+        raise ValueError("SECURESENSE_MODEL_SHA256 must be a 64-character SHA-256 digest.")
+
+    digest = hashlib.sha256()
+    model_file.seek(0)
+    for chunk in iter(lambda: model_file.read(1024 * 1024), b""):
+        digest.update(chunk)
+    model_file.seek(0)
+    if not hmac.compare_digest(digest.hexdigest(), expected_sha256):
+        raise ValueError("Model artifact integrity check failed.")
+
+
 @lru_cache(maxsize=1)
 def load_artifact() -> dict:
     if not MODEL_PATH.is_file():
         raise FileNotFoundError(
             f"Trained model not found at {MODEL_PATH}. Run the training script first."
         )
-    artifact = joblib.load(MODEL_PATH)
+    expected_sha256 = os.environ.get("SECURESENSE_MODEL_SHA256", "").strip().lower()
+    with MODEL_PATH.open("rb") as model_file:
+        verify_model_integrity(model_file, expected_sha256)
+        artifact = joblib.load(model_file)
     if not isinstance(artifact, dict) or "model" not in artifact:
         raise ValueError(f"Model artifact at {MODEL_PATH} has an invalid format.")
     return artifact
@@ -119,7 +152,11 @@ def insights() -> dict:
     try:
         return read_summary()
     except FileNotFoundError as error:
-        raise HTTPException(status_code=503, detail=str(error)) from error
+        logger.error("Training summary is unavailable: %s", error)
+        raise HTTPException(
+            status_code=503,
+            detail="Training insights are unavailable. Train the model and retry.",
+        ) from error
     except (OSError, json.JSONDecodeError, ValueError) as error:
         logger.exception("Unable to read training insights.")
         raise HTTPException(status_code=500, detail="Training insights could not be read.") from error
@@ -130,7 +167,11 @@ def analyze(request: AnalyzeRequest) -> dict:
     try:
         artifact = load_artifact()
     except FileNotFoundError as error:
-        raise HTTPException(status_code=503, detail=str(error)) from error
+        logger.error("Trained URL classifier is unavailable: %s", error)
+        raise HTTPException(
+            status_code=503,
+            detail="The trained model is unavailable. Train the model and retry.",
+        ) from error
     except Exception as error:
         logger.exception("Unable to load the trained URL classifier.")
         raise HTTPException(status_code=500, detail="The trained model could not be loaded.") from error
@@ -140,6 +181,14 @@ def analyze(request: AnalyzeRequest) -> dict:
         model = artifact["model"]
         probabilities = model.predict_proba(features)[0]
         class_names = [str(name) for name in model.classes_]
+        if len(class_names) == 0 or len(class_names) != len(probabilities):
+            raise ValueError("The model returned an invalid class probability vector.")
+        if any(
+            not (0 <= float(probability) <= 1)
+            or not math.isfinite(float(probability))
+            for probability in probabilities
+        ):
+            raise ValueError("The model returned invalid class probabilities.")
         class_scores = {
             name: round(float(score), 6)
             for name, score in zip(class_names, probabilities, strict=True)

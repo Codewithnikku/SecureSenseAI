@@ -5,7 +5,8 @@ import { useSearchParams } from "next/navigation";
 import { ActivityEvent, sampleActivity, sampleThreats, Threat, ThreatStatus } from "../lib/dashboard-data";
 import { useStoredState } from "../lib/local-storage";
 import { EmptyState, Icon, Notice, PageHeading } from "./dashboard-ui";
-import { LatestAnalysisWidget, ModelInsightsWidget } from "./model-insights";
+import { apiBase } from "./model-insights";
+import { SecurityWorldMap } from "./security-world-map";
 
 function downloadCsv(filename: string, rows: Array<Array<string | number>>) {
   const csv = rows.map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(",")).join("\r\n");
@@ -36,118 +37,136 @@ function ActionButton({
   );
 }
 
-function DashboardChart() {
-  return (
-    <div className="chart-wrap" role="img" aria-label="Threats detected and blocked over the last seven days.">
-      <div className="chart-y-labels" aria-hidden="true"><span>400</span><span>300</span><span>200</span><span>100</span><span>0</span></div>
-      <svg className="threat-chart" viewBox="0 0 680 204" preserveAspectRatio="none" aria-hidden="true">
-        <defs>
-          <linearGradient id="detected-fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#7967ed" stopOpacity=".19" /><stop offset="100%" stopColor="#7967ed" stopOpacity="0" /></linearGradient>
-          <linearGradient id="blocked-fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#36b88a" stopOpacity=".12" /><stop offset="100%" stopColor="#36b88a" stopOpacity="0" /></linearGradient>
-        </defs>
-        <path d="M0 35H680M0 77H680M0 119H680M0 161H680M0 203H680" stroke="#edf0f5" strokeDasharray="4 5" />
-        <path d="M0 94 C38 89 58 50 98 61 S154 109 194 92 S251 51 291 66 S348 119 388 98 S446 62 486 73 S544 123 583 105 S640 65 680 78 L680 204 L0 204Z" fill="url(#detected-fill)" />
-        <path d="M0 112 C38 108 58 76 98 83 S154 122 194 108 S251 75 291 86 S348 133 388 115 S446 83 486 92 S544 137 583 120 S640 88 680 96 L680 204 L0 204Z" fill="url(#blocked-fill)" />
-        <path d="M0 94 C38 89 58 50 98 61 S154 109 194 92 S251 51 291 66 S348 119 388 98 S446 62 486 73 S544 123 583 105 S640 65 680 78" fill="none" stroke="#7967ed" strokeWidth="2.7" strokeLinecap="round" />
-        <path d="M0 112 C38 108 58 76 98 83 S154 122 194 108 S251 75 291 86 S348 133 388 115 S446 83 486 92 S544 137 583 120 S640 88 680 96" fill="none" stroke="#36b88a" strokeWidth="2.5" strokeLinecap="round" />
-      </svg>
-      <div className="chart-x-labels" aria-hidden="true"><span>Mon, 12</span><span>Tue, 13</span><span>Wed, 14</span><span>Thu, 15</span><span>Fri, 16</span><span>Sat, 17</span><span>Sun, 18</span></div>
-    </div>
-  );
-}
-
 export function OverviewPage() {
-  const [range, setRange] = useState("Last 7 days");
-  const [notice, setNotice] = useState("");
-  const summaryRows = [
-    ["Metric", "Value", "Change"],
-    ["Threats detected", "1,284", "+12.8%"],
-    ["Threats blocked", "1,276", "+8.2%"],
-    ["Scans completed", "3,642", "+18.4%"],
-    ["Average response time", "0.42 seconds", "-0.18 seconds"],
+  const [range, setRange] = useState("Weekly");
+  const [deviceQuery, setDeviceQuery] = useState("");
+  const months = [
+    { month: "Jan", clicked: 64, compromised: 84 },
+    { month: "Feb", clicked: 43, compromised: 69 },
+    { month: "Mar", clicked: 72, compromised: 96 },
+    { month: "Apr", clicked: 48, compromised: 75 },
+    { month: "May", clicked: 65, compromised: 86 },
+    { month: "Jun", clicked: 48, compromised: 75 },
+    { month: "Jul", clicked: 86, compromised: 100 },
+    { month: "Aug", clicked: 51, compromised: 78 },
+    { month: "Sep", clicked: 39, compromised: 62 },
+    { month: "Oct", clicked: 62, compromised: 82 },
+    { month: "Nov", clicked: 56, compromised: 78 },
+    { month: "Dec", clicked: 46, compromised: 72 },
   ];
+  const devices = sampleThreats.filter((threat) => (
+    `${threat.name} ${threat.source} ${threat.severity} ${threat.status}`.toLowerCase().includes(deviceQuery.toLowerCase())
+  ));
 
   return (
     <>
       <PageHeading
-        eyebrow="MONDAY, MAY 19, 2025"
-        title={<>Good morning, Jordan <span className="heading-spark" aria-hidden="true">✦</span></>}
-        description="Here&apos;s what&apos;s happening with your security today."
+        eyebrow="SECURITY OPERATIONS · MONDAY, MAY 19, 2025"
+        title="Threat activity overview"
+        description="A live-style view of activity across your sample workspace."
         actions={
           <>
-            <label className="button button-secondary range-control"><Icon name="clock" size={16} /><select value={range} onChange={(event) => setRange(event.target.value)} aria-label="Select dashboard date range"><option>Last 7 days</option><option>Last 30 days</option><option>Last 90 days</option></select></label>
-            <a className="button button-secondary heading-analysis-link" href="/analysis"><Icon name="radar" size={15} />Analyze URL</a>
-            <ActionButton variant="primary" onClick={() => { downloadCsv("securesense-overview.csv", summaryRows); setNotice("Your overview report has been downloaded."); }}><Icon name="download" size={16} />Export report</ActionButton>
+            <label className="button button-secondary range-control">
+              <Icon name="clock" size={15} />
+              <select value={range} onChange={(event) => setRange(event.target.value)} aria-label="Select activity range">
+                <option>Weekly</option><option>Monthly</option><option>Quarterly</option>
+              </select>
+            </label>
+            <a className="button button-primary" href="/analysis"><Icon name="radar" size={15} />Scan a URL</a>
           </>
         }
       />
-      {notice && <Notice tone="success">{notice}</Notice>}
-      <section className="overview-grid" aria-label="Security overview">
-        <article className="risk-card">
-          <div className="risk-content">
-            <span className="risk-kicker"><span className="status-pulse" /> SECURITY POSTURE</span>
-            <h2>Your systems are<br className="desktop-break" /> looking good.</h2>
-            <p>This is sample workspace data. Connect an integration to monitor your environment.</p>
-            <a className="risk-link" href="/integrations">Connect a security tool <Icon name="arrow" size={15} /></a>
+
+      <section className="reference-dashboard-grid reference-top-grid" aria-label="Traffic and threat overview">
+        <article className="panel reference-panel traffic-panel">
+          <div className="panel-heading reference-panel-heading">
+            <div><h2>Traffic overview</h2><p>Threat activity across the workspace</p></div>
+            <span className="range-readout">{range}</span>
           </div>
-          <div className="risk-score" aria-label="Sample security score 94 out of 100">
-            <svg viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="48" fill="none" stroke="rgba(255,255,255,.15)" strokeWidth="8" /><circle cx="60" cy="60" r="48" fill="none" stroke="#84e0bc" strokeWidth="8" strokeLinecap="round" strokeDasharray="283 302" transform="rotate(-90 60 60)" /></svg>
-            <div className="score-copy"><strong>94</strong><span>out of 100</span></div><span className="score-label">Sample score</span>
+          <div className="reference-legend">
+            <span><i className="legend-dot clicked-dot" />Link clicked</span>
+            <span><i className="legend-dot compromised-dot" />Endpoint compromised</span>
           </div>
-          <div className="risk-decoration risk-decoration-one" /><div className="risk-decoration risk-decoration-two" />
+          <div className="reference-bar-chart" role="img" aria-label="Monthly link click and compromised endpoint activity">
+            <div className="reference-y-labels" aria-hidden="true"><span>25k</span><span>20k</span><span>15k</span><span>10k</span><span>5k</span><span>0</span></div>
+            <div className="reference-bars">
+              {months.map((item) => (
+                <div className="reference-bar-group" key={item.month} aria-label={`${item.month}: ${item.clicked} thousand clicks`}>
+                  <span className="reference-bar-track" style={{ height: `${item.compromised}%` }} />
+                  <span className="reference-bar-value" style={{ height: `${item.clicked}%` }} />
+                  <small>{item.month}</small>
+                </div>
+              ))}
+            </div>
+          </div>
         </article>
-        <article className="protection-card">
-          <div className="card-heading"><div><span className="card-icon protection-icon"><Icon name="lock" size={17} /></span><h2>Protection status</h2></div></div>
-          <p className="protection-summary">Sample status only. Set up an integration for live signals.</p>
-          <div className="protection-list">
-            <div><span className="protection-item-icon"><Icon name="globe" size={15} /></span><span>Network firewall</span><span className="enabled-pill"><i />Sample</span></div>
-            <div><span className="protection-item-icon"><Icon name="scan" size={15} /></span><span>Real-time scanning</span><span className="enabled-pill"><i />Sample</span></div>
-            <div><span className="protection-item-icon"><Icon name="database" size={15} /></span><span>Threat database</span><span className="updated-label">Demo data</span></div>
+
+        <article className="panel reference-panel threat-types-panel">
+          <div className="panel-heading reference-panel-heading"><div><h2>Threat types</h2><p>Severity distribution</p></div><button className="subtle-icon-button" aria-label="Threat type details"><span>···</span></button></div>
+          <div className="threat-types-content">
+            <div className="severity-donut" role="img" aria-label="Threat severity breakdown">
+              <div className="donut-center"><strong>198.2 GB</strong><span>Scanned</span></div>
+            </div>
+            <div className="severity-legend">
+              {[["Critical", "25%", "critical"], ["Major", "35%", "major"], ["Minor", "38%", "minor"], ["Other", "2%", "other"]].map(([label, value, tone]) => (
+                <div className="severity-legend-item" key={label}><i className={tone} /><span>{label}</span><strong>{value}</strong></div>
+              ))}
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section className="reference-dashboard-grid reference-middle-grid" aria-label="Threat focus and geographic activity">
+        <article className="panel reference-panel focused-panel">
+          <div className="panel-heading reference-panel-heading"><div><h2>Focused view</h2><p>Alerts by severity</p></div><span className="focused-info" title="Illustrative sample workspace data">i</span></div>
+          <div className="focused-content">
+            <div className="focused-legend">
+              {[["Critical", "25", "critical"], ["Major", "245", "major"], ["Minor", "787", "minor"], ["Informational", "2", "other"]].map(([label, value, tone]) => (
+                <div className="focused-legend-item" key={label}><i className={tone} /><span>{label}<small>{value} events</small></span></div>
+              ))}
+            </div>
+            <div className="focused-donut" role="img" aria-label="2,163 alerts by severity">
+              <div className="donut-center"><strong>2,163</strong><span>Total alerts</span></div>
+            </div>
+          </div>
+        </article>
+
+        <article className="panel reference-panel map-panel">
+          <div className="panel-heading reference-panel-heading"><div><h2>Global traffic</h2><p>Activity by source region · illustrative sample data</p></div><span className="live-indicator"><i />Monitoring</span></div>
+          <div className="map-content">
+            <SecurityWorldMap />
+            <aside className="country-card" aria-label="Top countries">
+              <h3>Top countries</h3>
+              {[["🇺🇸", "USA", "13", 32], ["🇮🇳", "India", "26", 45], ["🇨🇦", "Canada", "38", 65], ["🇨🇳", "China", "45", 85]].map(([flag, country, count, width]) => (
+                <div className="country-row" key={country}>
+                  <div><span className="country-flag">{flag}</span><strong>{country}</strong><small>({count})</small></div>
+                  <span className="country-meter"><i style={{ width: `${width}%` }} /></span>
+                </div>
+              ))}
+            </aside>
           </div>
         </article>
       </section>
-      <section className="metric-grid" aria-label="Security metrics">
-        {[
-          ["Threats detected", "1,284", "+12.8%", "shield", "violet"],
-          ["Threats blocked", "1,276", "+8.2%", "check", "green"],
-          ["Scans completed", "3,642", "+18.4%", "scan", "blue"],
-          ["Avg. response time", "0.42s", "-0.18s", "zap", "amber"],
-        ].map(([label, value, change, icon, tone]) => (
-          <article className="metric-card" key={label}>
-            <div className="metric-top"><span className={`metric-icon ${tone}`}><Icon name={icon as "shield" | "check" | "scan" | "zap"} size={18} /></span><span className="metric-change is-positive"><Icon name="trend" size={13} />{change}</span></div>
-            <p className="metric-label">{label}</p><div className="metric-bottom"><strong>{value}</strong><span>sample metrics</span></div>
-          </article>
-        ))}
-      </section>
-      <section className="insights-grid dashboard-insights-grid">
-        <ModelInsightsWidget />
-        <LatestAnalysisWidget />
-      </section>
-      <section className="content-grid">
-        <article className="panel chart-panel">
-          <div className="panel-heading"><div><h2>Threat activity</h2><p>Sample threats detected across your network</p></div><span className="range-readout">{range}</span></div>
-          <div className="chart-legend"><span><i className="legend-dot detected-dot" />Detected <strong>1,284</strong></span><span><i className="legend-dot blocked-dot" />Blocked <strong>1,276</strong></span></div>
-          <DashboardChart />
-        </article>
-        <article className="panel activity-panel">
-          <div className="panel-heading"><div><h2>Recent activity</h2><p>Latest events in your workspace</p></div><a className="text-link" href="/activity">View all <Icon name="arrow" size={14} /></a></div>
-          <div className="activity-list">
-            {sampleActivity.slice(0, 3).map((event, index) => (
-              <div className="activity-row" key={event.id}><span className={`activity-icon ${["blue", "green", "violet"][index]}`}><Icon name={event.category === "Scan" ? "scan" : event.category === "System" ? "settings" : "shield"} size={16} /></span><span className="activity-copy"><strong>{event.title}</strong><small>{event.description}</small></span><time>{event.time}</time></div>
-            ))}
-          </div>
-          <div className="activity-footer"><span className="live-dot" />Sample activity feed</div>
-        </article>
-      </section>
-      <section className="panel threats-panel">
-        <div className="panel-heading threats-heading"><div><h2>Recent threats</h2><p>Sample security events for this workspace</p></div><a className="text-link" href="/threats">View all threats <Icon name="arrow" size={14} /></a></div>
+
+      <section className="panel reference-panel devices-panel">
+        <div className="panel-heading reference-panel-heading devices-heading">
+          <div><h2>2,163 active devices</h2><p>Recently detected security events and assets</p></div>
+          <label className="device-search"><Icon name="search" size={15} /><input value={deviceQuery} onChange={(event) => setDeviceQuery(event.target.value)} placeholder="Search identities" aria-label="Search active devices" /></label>
+        </div>
         <div className="threat-table-wrap">
-          <table className="threat-table">
-            <thead><tr><th>THREAT</th><th>TYPE</th><th>DETECTED</th><th>SEVERITY</th><th>STATUS</th></tr></thead>
-            <tbody>{sampleThreats.slice(0, 3).map((threat) => (
-              <tr key={threat.id}><td><span className={`threat-icon ${threat.severity === "Medium" ? "amber" : "red"}`}><Icon name={threat.type === "Brute force" ? "user" : threat.severity === "Critical" ? "alert" : "database"} size={16} /></span><span className="threat-name-cell"><strong>{threat.name}</strong><small>{threat.source}</small></span></td><td><span className="type-label">{threat.type}</span></td><td className="time-cell">{threat.detected}</td><td><span className={`severity-badge ${threat.severity.toLowerCase()}`}><i />{threat.severity}</span></td><td><span className="status-label"><Icon name="check" size={14} />{threat.status}</span></td></tr>
+          <table className="threat-table reference-device-table">
+            <thead><tr><th>ASSET NAME</th><th>SEVERITY</th><th>STATUS</th><th>LAST ACTIVE</th><th>TIME DETECTED (UTC)</th><th>ASSETS</th><th>ACTION</th></tr></thead>
+            <tbody>{devices.map((threat) => (
+              <tr key={threat.id}>
+                <td><span className="device-name"><span className="device-mark"><Icon name="database" size={15} /></span><span><strong>{threat.name}</strong><small>{threat.source}</small></span></span></td>
+                <td><span className={`severity-badge ${threat.severity.toLowerCase()}`}><i />{threat.severity}</span></td>
+                <td><span className={`table-status ${threat.status.toLowerCase()}`}>{threat.status}</span></td>
+                <td>{threat.detected}</td><td>09:18:24 UTC</td><td>{threat.type}</td>
+                <td><a className="device-action" href="/threats" aria-label={`Review ${threat.name}`}><Icon name="arrow" size={15} /></a></td>
+              </tr>
             ))}</tbody>
           </table>
+          {devices.length === 0 && <EmptyState icon="search" title="No matching devices" description="Try another device name, source address, or severity." />}
         </div>
       </section>
     </>
@@ -229,7 +248,19 @@ export function ThreatsPage() {
   );
 }
 
-type ScanRecord = { id: string; name: string; scope: string; started: string; duration: string; status: "Completed" | "Running" };
+type ScanRecord = {
+  id: string;
+  name: string;
+  scope: string;
+  started: string;
+  duration: string;
+  status: "Completed" | "Running" | "Failed";
+  target?: string;
+  prediction?: string;
+  isThreat?: boolean;
+  confidence?: number;
+  recommendation?: string;
+};
 const initialScans: ScanRecord[] = [
   { id: "SC-2038", name: "Full system scan", scope: "Workspace", started: "Today, 09:18 AM", duration: "2m 34s", status: "Completed" },
   { id: "SC-2037", name: "Scheduled scan", scope: "Workspace", started: "Yesterday, 02:00 PM", duration: "1m 52s", status: "Completed" },
@@ -240,37 +271,152 @@ const initialScans: ScanRecord[] = [
 export function ScanHistoryPage() {
   const [scans, setScans] = useStoredState<ScanRecord[]>("securesense-scan-history", initialScans);
   const [running, setRunning] = useState(false);
+  const [target, setTarget] = useState("");
   const [notice, setNotice] = useState("");
+  const [scanError, setScanError] = useState("");
+  const latestResult = scans[0]?.prediction ? scans[0] : null;
 
-  function startScan() {
+  async function startScan(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     if (running) return;
-    const scan: ScanRecord = { id: `SC-${Date.now().toString().slice(-5)}`, name: "Quick scan", scope: "Workspace", started: "Just now", duration: "In progress", status: "Running" };
-    setScans([scan, ...scans]);
+    const candidate = target.trim();
+    if (!candidate) return;
+    const startedAt = performance.now();
+    const scan: ScanRecord = {
+      id: `SC-${Date.now().toString().slice(-5)}`,
+      name: "URL threat scan",
+      scope: "Local model",
+      started: new Date().toLocaleString(),
+      duration: "In progress",
+      status: "Running",
+      target: candidate,
+    };
+    setScans((current) => [scan, ...current.filter((item) => item.id !== scan.id)].slice(0, 100));
     setRunning(true);
-    setNotice("Demo scan started. No files or live systems are being scanned.");
-    window.setTimeout(() => {
-      setScans((current) => current.map((item) => item.id === scan.id ? { ...item, duration: "1m 12s", status: "Completed" } : item));
+    setNotice("");
+    setScanError("");
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 15_000);
+    try {
+      const [response] = await Promise.all([
+        fetch(`${apiBase()}/analyze`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: candidate }),
+          cache: "no-store",
+          signal: controller.signal,
+        }),
+        new Promise<void>((resolve) => window.setTimeout(resolve, 850)),
+      ]);
+      let payload: unknown;
+      try {
+        payload = await response.json();
+      } catch {
+        throw new Error("The model service returned an unreadable response.");
+      }
+      if (!response.ok) {
+        const detail = typeof payload === "object" && payload !== null && "detail" in payload && typeof payload.detail === "string"
+          ? payload.detail
+          : `The model service returned HTTP ${response.status}.`;
+        throw new Error(detail);
+      }
+      if (
+        typeof payload !== "object"
+        || payload === null
+        || !("prediction" in payload)
+        || typeof payload.prediction !== "string"
+        || !payload.prediction.trim()
+        || !("is_threat" in payload)
+        || typeof payload.is_threat !== "boolean"
+        || !("confidence" in payload)
+        || typeof payload.confidence !== "number"
+        || !Number.isFinite(payload.confidence)
+        || payload.confidence < 0
+        || payload.confidence > 1
+      ) {
+        throw new Error("The model service returned an incomplete scan result.");
+      }
+
+      const result: ScanRecord = {
+        ...scan,
+        duration: `${((performance.now() - startedAt) / 1000).toFixed(1)}s`,
+        status: "Completed",
+        prediction: payload.prediction,
+        isThreat: payload.is_threat,
+        confidence: payload.confidence,
+        recommendation: "recommendation" in payload && typeof payload.recommendation === "string"
+          ? payload.recommendation
+          : undefined,
+      };
+      setScans((current) => [result, ...current.filter((item) => item.id !== result.id)].slice(0, 100));
+      setNotice(`Scan complete: ${result.prediction} · ${(payload.confidence * 100).toFixed(1)}% model score.`);
+    } catch (reason) {
+      const message = reason instanceof DOMException && reason.name === "AbortError"
+        ? "The model service did not respond within 15 seconds."
+        : reason instanceof Error
+          ? reason.message
+          : "The model service returned an unexpected error.";
+      const failed: ScanRecord = {
+        ...scan,
+        duration: `${((performance.now() - startedAt) / 1000).toFixed(1)}s`,
+        status: "Failed",
+      };
+      setScans((current) => [failed, ...current.filter((item) => item.id !== failed.id)].slice(0, 100));
+      setScanError(`${message} Start the local ML API and confirm the CSV model is trained, then try again.`);
+    } finally {
+      window.clearTimeout(timeoutId);
+      const remaining = 850 - (performance.now() - startedAt);
+      if (remaining > 0) await new Promise<void>((resolve) => window.setTimeout(resolve, remaining));
       setRunning(false);
-      setNotice("Demo scan complete. Connect a scanning engine to analyze real assets.");
-    }, 2200);
+    }
   }
 
   return (
     <>
-      <PageHeading eyebrow="SCANS" title="Scan history" description="Review previous scans or run a sample scan workflow." actions={<ActionButton variant="primary" onClick={startScan} disabled={running}><Icon name={running ? "clock" : "scan"} size={16} />{running ? "Scan in progress…" : "Run a scan"}</ActionButton>} />
-      <Notice>Preview mode: scans update this browser only. Connect a scanning engine before using this for real assets.</Notice>
+      <PageHeading eyebrow="LOCAL URL SCANNER" title="Scan history" description="Run a URL through your locally trained threat classifier and review its result." actions={<button className="button button-primary" type="submit" form="scan-url-form" disabled={running}><Icon name={running ? "clock" : "scan"} size={16} />{running ? "Scanning…" : "Scan and run"}</button>} />
+      <Notice>URL text is analyzed locally by the trained model. Submitted destinations are never opened or fetched.</Notice>
       {notice && <Notice tone="success">{notice}</Notice>}
+      {scanError && <div className="page-notice scan-error" role="alert">{scanError}</div>}
+      <section className="panel scan-target-panel">
+        <form id="scan-url-form" className="scan-target-form" onSubmit={startScan}>
+          <label htmlFor="scan-target"><strong>URL or domain to scan</strong><span>Enter one HTTP/HTTPS URL or a domain name.</span></label>
+          <input id="scan-target" type="text" autoComplete="url" maxLength={2048} required placeholder="https://example.com" value={target} onChange={(event) => setTarget(event.target.value)} disabled={running} />
+          <span className="scan-target-note"><Icon name="lock" size={14} />Local URL-text analysis · no network request is sent to the destination</span>
+        </form>
+      </section>
+      {running && (
+        <section className="panel scan-progress" role="status" aria-live="polite">
+          <span className="scan-loader" aria-hidden="true"><Icon name="radar" size={52} /></span>
+          <p className="eyebrow">MODEL SCAN IN PROGRESS</p>
+          <h2>Analyzing URL signals</h2>
+          <strong className="scan-progress-target">{target}</strong>
+          <span>Extracting lexical features and comparing them with the trained threat classes.</span>
+        </section>
+      )}
+      {!running && latestResult && (
+        <section className={`panel scan-result ${latestResult.isThreat ? "threat-result" : "benign-result"}`} aria-live="polite">
+          <span className={`analysis-result-icon ${latestResult.isThreat ? "danger" : "safe"}`}><Icon name={latestResult.isThreat ? "alert" : "check"} size={20} /></span>
+          <div className="scan-result-copy">
+            <span className="eyebrow">LATEST MODEL RESULT</span>
+            <h2>{latestResult.prediction} {latestResult.isThreat ? "indicators found" : "signals found"}</h2>
+            <p>{latestResult.recommendation ?? "Review this model estimate before deciding whether to visit the destination."}</p>
+            <strong className="scan-result-target">{latestResult.target}</strong>
+          </div>
+          <span className="confidence-badge">{((latestResult.confidence ?? 0) * 100).toFixed(1)}% score</span>
+        </section>
+      )}
       <section className="metric-grid threat-summary-grid" aria-label="Scan summary">
-        <article className="metric-card"><p className="metric-label">Scans in history</p><div className="metric-bottom"><strong>{scans.length}</strong><span>this workspace</span></div></article>
-        <article className="metric-card"><p className="metric-label">Completed</p><div className="metric-bottom"><strong>{scans.filter((scan) => scan.status === "Completed").length}</strong><span>successful runs</span></div></article>
-        <article className="metric-card"><p className="metric-label">Currently running</p><div className="metric-bottom"><strong>{scans.filter((scan) => scan.status === "Running").length}</strong><span>in this browser</span></div></article>
+        <article className="metric-card"><p className="metric-label">Scans in history</p><div className="metric-bottom"><strong>{scans.length}</strong><span>saved in this browser</span></div></article>
+        <article className="metric-card"><p className="metric-label">Completed</p><div className="metric-bottom"><strong>{scans.filter((scan) => scan.status === "Completed").length}</strong><span>model responses</span></div></article>
+        <article className="metric-card"><p className="metric-label">Currently running</p><div className="metric-bottom"><strong>{running ? 1 : 0}</strong><span>local model scan</span></div></article>
         <article className="metric-card"><p className="metric-label">Last scan</p><div className="metric-bottom"><strong className="metric-small-value">{scans[0]?.started ?? "—"}</strong><span>{scans[0]?.name ?? "No scans yet"}</span></div></article>
       </section>
       <section className="panel data-panel">
-        <div className="panel-heading page-panel-heading"><div><h2>All scans</h2><p>Most recent scans appear first</p></div><span className="sample-badge">LOCAL PREVIEW</span></div>
+        <div className="panel-heading page-panel-heading"><div><h2>All scans</h2><p>Model results and earlier workspace records</p></div><span className="sample-badge">LOCAL HISTORY</span></div>
         <div className="threat-table-wrap">
-          <table className="threat-table scan-table"><thead><tr><th>SCAN</th><th>SCOPE</th><th>STARTED</th><th>DURATION</th><th>STATUS</th></tr></thead>
-            <tbody>{scans.map((scan) => <tr key={scan.id}><td><span className="threat-icon scan-row-icon"><Icon name="scan" size={16} /></span><span className="threat-name-cell"><strong>{scan.name}</strong><small>{scan.id}</small></span></td><td>{scan.scope}</td><td className="time-cell">{scan.started}</td><td>{scan.duration}</td><td><span className={`table-status ${scan.status.toLowerCase()}`}>{scan.status === "Running" && <span className="spinner" />}{scan.status}</span></td></tr>)}</tbody>
+          <table className="threat-table scan-table"><thead><tr><th>SCAN</th><th>TARGET / SCOPE</th><th>STARTED</th><th>RESULT</th><th>DURATION</th><th>STATUS</th></tr></thead>
+            <tbody>{scans.map((scan) => <tr key={scan.id}><td><span className="threat-icon scan-row-icon"><Icon name="scan" size={16} /></span><span className="threat-name-cell"><strong>{scan.name}</strong><small>{scan.id}</small></span></td><td><span className="scan-target-cell">{scan.target ?? scan.scope}</span></td><td className="time-cell">{scan.started}</td><td>{scan.prediction ? <span className={`scan-prediction${scan.isThreat ? " is-threat" : ""}`}>{scan.prediction}{typeof scan.confidence === "number" ? ` · ${(scan.confidence * 100).toFixed(0)}%` : ""}</span> : "—"}</td><td>{scan.duration}</td><td><span className={`table-status ${scan.status.toLowerCase()}`}>{scan.status === "Running" && <span className="spinner" />}{scan.status}</span></td></tr>)}</tbody>
           </table>
           {scans.length === 0 && <EmptyState icon="scan" title="No scans yet" description="Start a sample scan to see its progress and history here." />}
         </div>
